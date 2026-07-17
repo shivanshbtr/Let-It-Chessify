@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+:root {
+  --bg:      #1A1A1A;
+  --surface: #242424;
+  --sidebar: #4A3728;
+  --cream:   #F5F0E8;
+  --green:   #6B9E6B;
+  --gold:    #C8A96E;
+  --muted:   #8A8A8A;
+  --border:  #333333;
+
+  /* Home-screen "chess salon" accents */
+  --walnut-deep:   #110D09;
+  --walnut:        #1C1611;
+  --walnut-raised: #251E16;
+  --ivory:         #F3E8D3;
+  --brass:         #C9A15C;
+  --brass-dim:     #7C6640;
+  --felt:          #4E7A5B;
+  --felt-bright:   #6FA378;
+  --stone:         #9C9184;
+  --hairline:      #34291B;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--cream);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+.font-display { font-family: 'Playfair Display', serif; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.score-fill { transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+.corner-handle { cursor: grab; filter: drop-shadow(0 0 4px rgba(107,158,107,0.8)); }
+.corner-handle:active { cursor: grabbing; }
+
+.step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.2s; padding: 0; border: none; }
+.step-dot.active { background: var(--green); transform: scale(1.25); }
+.step-dot.done   { background: var(--gold); }
+.step-dot:disabled { pointer-events: none; }
+
+.palette-piece { cursor: grab; transition: transform 0.15s; }
+.palette-piece:hover { transform: scale(1.15); }
+
+/* --- Home screen: chess-salon dressing --- */
+
+.checker-veil {
+  background-image:
+    linear-gradient(45deg, var(--hairline) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--hairline) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--hairline) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--hairline) 75%);
+  background-size: 56px 56px;
+  background-position: 0 0, 0 28px, 28px -28px, -28px 0px;
+  opacity: 0.35;
+}
+
+.hero-vignette {
+  background: radial-gradient(ellipse 60% 50% at 50% 38%, rgba(201,161,92,0.10), transparent 70%);
+}
+
+.watermark-glyph {
+  font-family: 'Playfair Display', serif;
+  color: transparent;
+  background: linear-gradient(180deg, var(--brass) 0%, transparent 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  opacity: 0.10;
+  user-select: none;
+  pointer-events: none;
+}
+
+.text-engrave {
+  text-shadow: 0 1px 0 rgba(0,0,0,0.55), 0 -1px 0 rgba(255,255,255,0.05);
+}
+
+.corner-mark {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: var(--brass-dim);
+  transition: border-color 0.3s ease, width 0.3s ease, height 0.3s ease, opacity 0.3s ease;
+}
+.dropframe:hover .corner-mark,
+.dropframe.is-dragging .corner-mark {
+  border-color: var(--brass);
+  width: 26px;
+  height: 26px;
+}
+.dropframe.is-dragging .corner-mark { border-color: var(--felt-bright); }

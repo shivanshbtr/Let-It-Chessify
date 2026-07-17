@@ -1,0 +1,1 @@
+# Chess OCR — backend package
