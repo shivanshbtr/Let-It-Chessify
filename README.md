@@ -163,7 +163,7 @@ Let-It-Chessify/
 ### 1. Clone
 
 ```bash
-git clone https://github.com/<your-username>/Let-It-Chessify.git
+git clone https://github.com/shivanshbtr/Let-It-Chessify.git
 cd Let-It-Chessify
 ```
 
