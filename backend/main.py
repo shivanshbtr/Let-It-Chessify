@@ -122,7 +122,7 @@ async def startup():
     print(f"[Startup] Corner    :    {CORNER_MODEL_PATH}  exists={CORNER_MODEL_PATH.exists()}")
     print(f"[Startup] PieceDet  :    {PIECE_DETECTION_MODEL_PATH}  exists={PIECE_DETECTION_MODEL_PATH.exists()}")
     try:
-        engine = StockfishEngine(depth=40, move_time=12)
+        engine = StockfishEngine(depth=50, move_time=12)
         print(f"[Startup] Stockfish:     {engine.path}")
     except FileNotFoundError as e:
         print(f"[Startup] WARNING: {e}")
@@ -639,6 +639,7 @@ async def ws_analyze(websocket: WebSocket):
     fen       = data.get("fen")
     turn      = data.get("turn", "w")
     num_moves = min(int(data.get("num_moves", 3)), 5)
+    unlimited = bool(data.get("unlimited", False))
 
     try:
         chess.Board(fen)
@@ -655,7 +656,8 @@ async def ws_analyze(websocket: WebSocket):
     def run_stream():
         try:
             for update in engine.analyze_stream(
-                fen=fen, turn=turn, num_moves=num_moves, cancel_event=cancel_event
+                fen=fen, turn=turn, num_moves=num_moves,
+                cancel_event=cancel_event, unlimited=unlimited,
             ):
                 if cancel_event.is_set():
                     break
