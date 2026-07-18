@@ -194,13 +194,19 @@ class StockfishEngine:
             "score_bar":  score_bar,
         }
 
-    def analyze_stream(self, fen, turn="w", num_moves=3):
+    def analyze_stream(self, fen, turn="w", num_moves=3, cancel_event=None):
         """
         Generator version of analyze(): yields a result dict after every
         depth update Stockfish reports during iterative deepening, with an
         extra "depth" key (and "done": True on the final yield). Lets a
         caller show live progress -- depth counting up, eval/best-moves
         refining in real time -- instead of waiting for one final result.
+
+        cancel_event: optional threading.Event(). If set while iterating,
+        the search is stopped immediately (Stockfish is told to stop, and
+        the process is closed) instead of running to completion on a
+        position nobody cares about anymore -- e.g. the user already moved
+        on to a new position.
 
         Each yielded dict has the same shape as analyze()'s return value,
         plus "depth" and "done".
@@ -232,6 +238,9 @@ class StockfishEngine:
         with chess.engine.SimpleEngine.popen_uci(self.path) as engine:
             with engine.analysis(board, limit, multipv=num_moves) as analysis:
                 for info in analysis:
+                    if cancel_event is not None and cancel_event.is_set():
+                        break
+
                     depth = info.get("depth")
                     if depth is None or "score" not in info:
                         continue
@@ -249,6 +258,9 @@ class StockfishEngine:
 
                     pending_lines[pv_index] = info
                     pending_depth = depth
+
+        if cancel_event is not None and cancel_event.is_set():
+            return
 
         if pending_lines:
             final = self._snapshot_from_lines(board, pending_lines)
