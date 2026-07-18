@@ -4,6 +4,11 @@
 
 Let It Chessify is a fully offline chess board recognition and analysis tool. Point your camera at a physical board (or paste a screenshot from Lichess / Chess.com), and the app detects the position, lets you verify and fix the result, then hands it off to Stockfish for evaluation — with a live score bar, coloured move arrows, and a playable analysis board.
 
+> 🖥️ **Want a Windows desktop app instead of running this from source?**
+> See [**Let-It-Chessify-exe**](https://github.com/shivanshbtr/Let-It-Chessify-exe) —
+> packages this project into a standalone offline `.exe`, no Python/Node
+> setup required.
+
 ---
 
 ## Features
@@ -153,6 +158,10 @@ Let-It-Chessify/
 ---
 
 ## Getting started
+
+*Just want to run the app? Skip this section — download the ready-to-run
+Windows build from [Let-It-Chessify-exe](https://github.com/shivanshbtr/Let-It-Chessify-exe)
+instead.*
 
 ### Prerequisites
 
