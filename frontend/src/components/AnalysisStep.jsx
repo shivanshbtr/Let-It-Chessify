@@ -35,6 +35,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const [mode, setMode]         = useState(MODE_SCORE)
   const [evalData, setEvalData] = useState(null)
   const [loading, setLoading]   = useState(false)
+  const [timeLimitOn, setTimeLimitOn] = useState(true)
   const [boardOrientation, setBoardOrientation] = useState(turn === 'w' ? 'white' : 'black')
 
   // Position/move history is modeled as a single timeline with a cursor:
@@ -75,7 +76,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
   const closeStreamRef = useRef(null)
 
-  const fetchEval = useCallback((fen, currentTurn) => {
+  const fetchEval = useCallback((fen, currentTurn, unlimited) => {
     const requestId = ++analysisRequestId.current
 
     // Close any in-flight stream from a previous position before starting
@@ -97,7 +98,8 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
         if (requestId !== analysisRequestId.current) return
         console.error('Analysis failed:', e)
         setLoading(false)
-      }
+      },
+      unlimited
     )
   }, [])
 
@@ -114,13 +116,17 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   // whichever intermediate evals happen to land first. Waiting for the
   // position to sit still for a beat means only the position the user
   // actually stops on ever gets analysed.
+  //
+  // timeLimitOn is in the deps too so toggling it re-runs analysis on
+  // whatever position is currently showing, immediately reflecting the
+  // new mode rather than waiting for the next move.
   useEffect(() => {
     const t = game.turn()
     const timeoutId = setTimeout(() => {
-      fetchEval(currentFen, t)
+      fetchEval(currentFen, t, !timeLimitOn)
     }, 300)
     return () => clearTimeout(timeoutId)
-  }, [currentFen, fetchEval])
+  }, [currentFen, fetchEval, timeLimitOn])
 
   // Apply a move to the current position. Used both for dragging pieces on
   // the board and for clicking a suggested move -- the board should always
@@ -232,7 +238,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
   const evalCp   = evalData?.eval_cp   ?? null
   const depth    = evalData?.depth     ?? null
-  const maxDepth = 40
+  const maxDepth = 50
   const evalType = evalData?.eval_type ?? 'cp'
   const mateIn   = evalData?.mate_in   ?? null
 
@@ -293,6 +299,28 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
           Move suggestions
         </button>
       </div>
+
+      {/* Per-position analysis time limit -- on by default (12s cap).
+          Turning it off removes the cap entirely: analysis runs to full
+          depth and only stops when the position changes (new move,
+          Back/Forward, etc), which cancels it automatically. */}
+      <label className="flex items-center justify-between gap-2 px-1 text-xs
+                         text-[#8A8A8A] cursor-pointer select-none">
+        <span>Max analysis limit per position: 12s</span>
+        <button
+          role="switch"
+          aria-checked={timeLimitOn}
+          onClick={() => setTimeLimitOn(v => !v)}
+          className={`relative w-8 h-4.5 rounded-full transition-colors shrink-0 ${
+            timeLimitOn ? 'bg-[#6B9E6B]' : 'bg-[#333]'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 rounded-full bg-white
+                        transition-transform ${timeLimitOn ? 'translate-x-3.5' : ''}`}
+          />
+        </button>
+      </label>
 
       {/* Move suggestions lines (above board) */}
       {mode === MODE_SUGGEST && evalData?.best_moves && (
@@ -459,7 +487,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
         {/* Re-analyse */}
         <button
-          onClick={() => fetchEval(currentFen, game.turn())}
+          onClick={() => fetchEval(currentFen, game.turn(), !timeLimitOn)}
           disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#333]
                      text-[#8A8A8A] hover:text-[#F5F0E8] hover:border-[#555]
