@@ -35,3 +35,42 @@ export async function editFen(squareLabels, turn) {
 export async function analyze(fen, turn, numMoves = 3) {
   return post('/analyze', { fen, turn, num_moves: numMoves })
 }
+
+// Live version of analyze(): streams a fresh eval snapshot after every
+// depth Stockfish reports (depth counting up, eval/best-moves refining in
+// real time) instead of waiting for one final result.
+//
+// onUpdate(result) is called once per depth update; result has the same
+// shape as analyze()'s resolved value, plus `depth` and `done`.
+// Returns a function you can call to close the connection early (e.g. if
+// the user navigates away or a newer analysis supersedes this one).
+export function analyzeStream(fen, turn, numMoves = 3, onUpdate, onError) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const ws = new WebSocket(`${protocol}//${window.location.host}${BASE}/ws/analyze`)
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ fen, turn, num_moves: numMoves }))
+  }
+
+  ws.onmessage = (event) => {
+    let msg
+    try {
+      msg = JSON.parse(event.data)
+    } catch {
+      return
+    }
+    if (msg.success === false) {
+      onError?.(new Error(msg.error || 'Analysis failed'))
+      ws.close()
+      return
+    }
+    onUpdate?.(msg)
+    if (msg.done) ws.close()
+  }
+
+  ws.onerror = () => {
+    onError?.(new Error('Analysis connection failed'))
+  }
+
+  return () => ws.close()
+}
