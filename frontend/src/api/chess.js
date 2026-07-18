@@ -42,14 +42,18 @@ export async function analyze(fen, turn, numMoves = 3) {
 //
 // onUpdate(result) is called once per depth update; result has the same
 // shape as analyze()'s resolved value, plus `depth` and `done`.
+// unlimited: if true, the search ignores its normal time cap and runs to
+// full depth however long that takes -- the caller is responsible for
+// closing the connection (e.g. via the returned close function) when it
+// no longer needs the result, since there's no time limit to end it.
 // Returns a function you can call to close the connection early (e.g. if
 // the user navigates away or a newer analysis supersedes this one).
-export function analyzeStream(fen, turn, numMoves = 3, onUpdate, onError) {
+export function analyzeStream(fen, turn, numMoves = 3, onUpdate, onError, unlimited = false) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const ws = new WebSocket(`${protocol}//${window.location.host}${BASE}/ws/analyze`)
 
   ws.onopen = () => {
-    ws.send(JSON.stringify({ fen, turn, num_moves: numMoves }))
+    ws.send(JSON.stringify({ fen, turn, num_moves: numMoves, unlimited }))
   }
 
   ws.onmessage = (event) => {
