@@ -25,6 +25,8 @@ Key decisions logged:
 
 import sys
 import os
+import asyncio
+import threading
 import base64
 import traceback
 from pathlib import Path
@@ -33,7 +35,7 @@ from io import BytesIO
 import cv2
 import numpy as np
 from PIL import Image
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -120,7 +122,7 @@ async def startup():
     print(f"[Startup] Corner    :    {CORNER_MODEL_PATH}  exists={CORNER_MODEL_PATH.exists()}")
     print(f"[Startup] PieceDet  :    {PIECE_DETECTION_MODEL_PATH}  exists={PIECE_DETECTION_MODEL_PATH.exists()}")
     try:
-        engine = StockfishEngine(depth=15, move_time=0.5)
+        engine = StockfishEngine(depth=40, move_time=None)
         print(f"[Startup] Stockfish:     {engine.path}")
     except FileNotFoundError as e:
         print(f"[Startup] WARNING: {e}")
@@ -603,3 +605,81 @@ async def analyze(req: AnalyzeRequest):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.websocket("/ws/analyze")
+async def ws_analyze(websocket: WebSocket):
+    """
+    Live version of /analyze: streams a fresh eval snapshot after every
+    depth Stockfish reports, so the client can show depth counting up
+    (1/25, 2/25, ...) with the eval bar / best moves refining in real time,
+    instead of waiting for one final result.
+
+    Client sends one JSON message to kick things off:
+        {"fen": "...", "turn": "w", "num_moves": 3}
+    Server streams back:
+        {"success": true, "depth": N, "done": false, "eval_cp": ..., ...}
+        ... one message per depth update ...
+        {"success": true, "depth": FINAL, "done": true, ...}
+    or on error:
+        {"success": false, "error": "..."}
+    """
+    await websocket.accept()
+
+    if engine is None:
+        await websocket.send_json({"success": False, "error": "Stockfish not available."})
+        await websocket.close()
+        return
+
+    try:
+        data = await websocket.receive_json()
+        fen       = data.get("fen")
+        turn      = data.get("turn", "w")
+        num_moves = min(int(data.get("num_moves", 3)), 5)
+
+        try:
+            chess.Board(fen)
+        except Exception:
+            await websocket.send_json({"success": False, "error": "Invalid FEN string"})
+            await websocket.close()
+            return
+
+        loop  = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        DONE  = object()  # sentinel meaning "generator finished, stop reading"
+
+        def run_stream():
+            try:
+                for update in engine.analyze_stream(fen=fen, turn=turn, num_moves=num_moves):
+                    asyncio.run_coroutine_threadsafe(queue.put(update), loop)
+            except Exception as e:
+                asyncio.run_coroutine_threadsafe(
+                    queue.put({"success": False, "error": str(e)}), loop
+                )
+            finally:
+                asyncio.run_coroutine_threadsafe(queue.put(DONE), loop)
+
+        threading.Thread(target=run_stream, daemon=True).start()
+
+        while True:
+            update = await queue.get()
+            if update is DONE:
+                break
+            if isinstance(update, dict) and update.get("success") is False:
+                await websocket.send_json(update)
+                break
+            await websocket.send_json({"success": True, **update})
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            await websocket.send_json({"success": False, "error": str(e)})
+        except Exception:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
