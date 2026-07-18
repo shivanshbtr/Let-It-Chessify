@@ -122,7 +122,7 @@ async def startup():
     print(f"[Startup] Corner    :    {CORNER_MODEL_PATH}  exists={CORNER_MODEL_PATH.exists()}")
     print(f"[Startup] PieceDet  :    {PIECE_DETECTION_MODEL_PATH}  exists={PIECE_DETECTION_MODEL_PATH.exists()}")
     try:
-        engine = StockfishEngine(depth=40, move_time=None)
+        engine = StockfishEngine(depth=40, move_time=12)
         print(f"[Startup] Stockfish:     {engine.path}")
     except FileNotFoundError as e:
         print(f"[Startup] WARNING: {e}")
@@ -633,43 +633,78 @@ async def ws_analyze(websocket: WebSocket):
 
     try:
         data = await websocket.receive_json()
-        fen       = data.get("fen")
-        turn      = data.get("turn", "w")
-        num_moves = min(int(data.get("num_moves", 3)), 5)
+    except WebSocketDisconnect:
+        return
 
+    fen       = data.get("fen")
+    turn      = data.get("turn", "w")
+    num_moves = min(int(data.get("num_moves", 3)), 5)
+
+    try:
+        chess.Board(fen)
+    except Exception:
+        await websocket.send_json({"success": False, "error": "Invalid FEN string"})
+        await websocket.close()
+        return
+
+    loop         = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    DONE         = object()  # sentinel meaning "generator finished, stop reading"
+    cancel_event = threading.Event()
+
+    def run_stream():
         try:
-            chess.Board(fen)
-        except Exception:
-            await websocket.send_json({"success": False, "error": "Invalid FEN string"})
-            await websocket.close()
-            return
-
-        loop  = asyncio.get_event_loop()
-        queue: asyncio.Queue = asyncio.Queue()
-        DONE  = object()  # sentinel meaning "generator finished, stop reading"
-
-        def run_stream():
-            try:
-                for update in engine.analyze_stream(fen=fen, turn=turn, num_moves=num_moves):
-                    asyncio.run_coroutine_threadsafe(queue.put(update), loop)
-            except Exception as e:
+            for update in engine.analyze_stream(
+                fen=fen, turn=turn, num_moves=num_moves, cancel_event=cancel_event
+            ):
+                if cancel_event.is_set():
+                    break
+                asyncio.run_coroutine_threadsafe(queue.put(update), loop)
+        except Exception as e:
+            if not cancel_event.is_set():
                 asyncio.run_coroutine_threadsafe(
                     queue.put({"success": False, "error": str(e)}), loop
                 )
-            finally:
-                asyncio.run_coroutine_threadsafe(queue.put(DONE), loop)
+        finally:
+            asyncio.run_coroutine_threadsafe(queue.put(DONE), loop)
 
-        threading.Thread(target=run_stream, daemon=True).start()
+    threading.Thread(target=run_stream, daemon=True).start()
 
+    async def watch_disconnect():
+        # Blocks on receive() until the client closes its end. This runs
+        # concurrently with the queue-reading loop below so a disconnect is
+        # noticed immediately -- not just when we happen to next try to
+        # send something (which, without this, would let Stockfish keep
+        # calculating on an abandoned position in the background).
+        try:
+            while True:
+                msg = await websocket.receive()
+                if msg.get("type") == "websocket.disconnect":
+                    break
+        except WebSocketDisconnect:
+            pass
+        cancel_event.set()
+
+    disconnect_task = asyncio.create_task(watch_disconnect())
+
+    try:
         while True:
-            update = await queue.get()
+            get_task = asyncio.create_task(queue.get())
+            done, _pending = await asyncio.wait(
+                {get_task, disconnect_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if disconnect_task in done:
+                get_task.cancel()
+                break
+
+            update = get_task.result()
             if update is DONE:
                 break
             if isinstance(update, dict) and update.get("success") is False:
                 await websocket.send_json(update)
                 break
             await websocket.send_json({"success": True, **update})
-
     except WebSocketDisconnect:
         pass
     except Exception as e:
@@ -679,6 +714,9 @@ async def ws_analyze(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        cancel_event.set()
+        if not disconnect_task.done():
+            disconnect_task.cancel()
         try:
             await websocket.close()
         except Exception:
