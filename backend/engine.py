@@ -194,7 +194,7 @@ class StockfishEngine:
             "score_bar":  score_bar,
         }
 
-    def analyze_stream(self, fen, turn="w", num_moves=3, cancel_event=None):
+    def analyze_stream(self, fen, turn="w", num_moves=3, cancel_event=None, unlimited=False):
         """
         Generator version of analyze(): yields a result dict after every
         depth update Stockfish reports during iterative deepening, with an
@@ -208,6 +208,13 @@ class StockfishEngine:
         position nobody cares about anymore -- e.g. the user already moved
         on to a new position.
 
+        unlimited: if True, ignore the engine's configured move_time cap
+        and search purely to the configured depth ceiling, however long
+        that takes. Intended to be paired with cancel_event -- the caller
+        is expected to cancel the search themselves (e.g. when the user
+        moves to a new position) rather than relying on a time cap to end
+        it, since there otherwise is none.
+
         Each yielded dict has the same shape as analyze()'s return value,
         plus "depth" and "done".
         """
@@ -216,9 +223,10 @@ class StockfishEngine:
         except Exception as e:
             raise ValueError(f"Invalid FEN: {e}")
 
+        move_time = None if unlimited else self.move_time
         limit = (
-            chess.engine.Limit(depth=self.depth, time=self.move_time)
-            if self.move_time else
+            chess.engine.Limit(depth=self.depth, time=move_time)
+            if move_time else
             chess.engine.Limit(depth=self.depth)
         )
 
