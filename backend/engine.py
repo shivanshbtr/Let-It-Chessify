@@ -216,12 +216,18 @@ class StockfishEngine:
             chess.engine.Limit(depth=self.depth)
         )
 
-        # multipv index -> latest info dict seen for the current depth.
-        # Stockfish reports one line update at a time (not all pv's at once
-        # like analyse() returns), so we accumulate them here and re-emit a
-        # full snapshot each time the #1 (best) line updates.
-        lines = {}
-        current_depth = 0
+        # Lines for the depth currently being swept (multipv index -> info).
+        # Stockfish reports line 1, then line 2, then line 3, etc. for one
+        # depth before moving to the next depth's line 1. We only emit once
+        # a full sweep for a depth is genuinely complete -- signaled by line
+        # 1 of the *next* depth arriving -- so every snapshot has moves that
+        # all belong to the same depth. Emitting as soon as line 1 updates
+        # (the old approach) mixed a fresh #1 move with stale #2/#3 moves
+        # still left over from the previous depth, which showed up as
+        # arrows jumping to the wrong squares / flickering between
+        # unrelated moves.
+        pending_lines = {}
+        pending_depth = None
 
         with chess.engine.SimpleEngine.popen_uci(self.path) as engine:
             with engine.analysis(board, limit, multipv=num_moves) as analysis:
@@ -230,23 +236,23 @@ class StockfishEngine:
                     if depth is None or "score" not in info:
                         continue
                     pv_index = info.get("multipv", 1)
-                    lines[pv_index] = info
-                    current_depth = depth
 
-                    # Wait until we at least have the best line for this
-                    # depth before emitting, so every snapshot is coherent
-                    # rather than showing a stale #1 next to a fresh #2/#3.
-                    if 1 not in lines:
-                        continue
+                    if pv_index == 1 and pending_lines:
+                        # Line 1 of a new depth arriving means the previous
+                        # depth's sweep just finished -- emit it now, then
+                        # start accumulating the new depth fresh.
+                        snapshot = self._snapshot_from_lines(board, pending_lines)
+                        snapshot["depth"] = pending_depth
+                        snapshot["done"] = False
+                        yield snapshot
+                        pending_lines = {}
 
-                    snapshot = self._snapshot_from_lines(board, lines)
-                    snapshot["depth"] = current_depth
-                    snapshot["done"] = False
-                    yield snapshot
+                    pending_lines[pv_index] = info
+                    pending_depth = depth
 
-        if lines:
-            final = self._snapshot_from_lines(board, lines)
-            final["depth"] = current_depth
+        if pending_lines:
+            final = self._snapshot_from_lines(board, pending_lines)
+            final["depth"] = pending_depth
             final["done"] = True
             yield final
 
