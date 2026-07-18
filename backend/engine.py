@@ -31,7 +31,15 @@ STOCKFISH_PATHS = [
 
 def find_stockfish():
     """Find Stockfish binary from known paths."""
+    import os
     import shutil
+
+    # Explicit override (used by the desktop-app launcher so the packaged
+    # .exe doesn't depend on the current working directory) -- checked first.
+    env_path = os.environ.get("STOCKFISH_PATH")
+    if env_path and Path(env_path).exists():
+        return env_path
+
     # Check PATH first
     sf = shutil.which("stockfish")
     if sf:
@@ -49,10 +57,10 @@ class StockfishEngine:
     Opened once per request and closed cleanly after.
     """
 
-    def __init__(self, stockfish_path=None, depth=15, move_time=0.5):
+    def __init__(self, stockfish_path=None, depth=25, move_time=None):
         self.path      = stockfish_path or find_stockfish()
         self.depth     = depth
-        self.move_time = move_time   # seconds per analysis
+        self.move_time = move_time   # seconds per analysis; None = depth-only, no time cap
 
         if self.path is None:
             raise FileNotFoundError(
@@ -93,11 +101,13 @@ class StockfishEngine:
         except Exception as e:
             raise ValueError(f"Invalid FEN: {e}")
 
+        limit = chess.engine.Limit(depth=self.depth, time=self.move_time) if self.move_time else chess.engine.Limit(depth=self.depth)
+
         with chess.engine.SimpleEngine.popen_uci(self.path) as engine:
             # Analyze with multipv for top N moves
             info = engine.analyse(
                 board,
-                chess.engine.Limit(depth=self.depth, time=self.move_time),
+                limit,
                 multipv=num_moves,
             )
 
@@ -155,6 +165,136 @@ class StockfishEngine:
                         # Same signless-zero issue as above: this move itself
                         # delivers mate. Infer the winner from whose turn it
                         # is right after the move (that side is the mated one).
+                        board_after = board.copy()
+                        board_after.push(move)
+                        mv_cp = -10000 if board_after.turn == chess.WHITE else 10000
+                    else:
+                        mv_cp = 10000 if mv_mate > 0 else -10000
+                else:
+                    mv_cp = mv_white.score()
+
+            try:
+                san = board.san(move)
+            except Exception:
+                san = move.uci()
+
+            best_moves.append({
+                "uci":       move.uci(),
+                "san":       san,
+                "eval_cp":   mv_cp,
+                "eval_type": mv_type,
+                "mate_in":   abs(mv_mate) if mv_mate is not None else None,
+            })
+
+        return {
+            "eval_cp":    eval_cp,
+            "eval_type":  eval_type,
+            "mate_in":    mate_in,
+            "best_moves": best_moves,
+            "score_bar":  score_bar,
+        }
+
+    def analyze_stream(self, fen, turn="w", num_moves=3):
+        """
+        Generator version of analyze(): yields a result dict after every
+        depth update Stockfish reports during iterative deepening, with an
+        extra "depth" key (and "done": True on the final yield). Lets a
+        caller show live progress -- depth counting up, eval/best-moves
+        refining in real time -- instead of waiting for one final result.
+
+        Each yielded dict has the same shape as analyze()'s return value,
+        plus "depth" and "done".
+        """
+        try:
+            board = chess.Board(fen)
+        except Exception as e:
+            raise ValueError(f"Invalid FEN: {e}")
+
+        limit = (
+            chess.engine.Limit(depth=self.depth, time=self.move_time)
+            if self.move_time else
+            chess.engine.Limit(depth=self.depth)
+        )
+
+        # multipv index -> latest info dict seen for the current depth.
+        # Stockfish reports one line update at a time (not all pv's at once
+        # like analyse() returns), so we accumulate them here and re-emit a
+        # full snapshot each time the #1 (best) line updates.
+        lines = {}
+        current_depth = 0
+
+        with chess.engine.SimpleEngine.popen_uci(self.path) as engine:
+            with engine.analysis(board, limit, multipv=num_moves) as analysis:
+                for info in analysis:
+                    depth = info.get("depth")
+                    if depth is None or "score" not in info:
+                        continue
+                    pv_index = info.get("multipv", 1)
+                    lines[pv_index] = info
+                    current_depth = depth
+
+                    # Wait until we at least have the best line for this
+                    # depth before emitting, so every snapshot is coherent
+                    # rather than showing a stale #1 next to a fresh #2/#3.
+                    if 1 not in lines:
+                        continue
+
+                    snapshot = self._snapshot_from_lines(board, lines)
+                    snapshot["depth"] = current_depth
+                    snapshot["done"] = False
+                    yield snapshot
+
+        if lines:
+            final = self._snapshot_from_lines(board, lines)
+            final["depth"] = current_depth
+            final["done"] = True
+            yield final
+
+    def _snapshot_from_lines(self, board, lines):
+        """Build one analyze()-shaped result dict from the multipv lines
+        accumulated so far during streaming analysis."""
+        primary = lines.get(1)
+        if primary is None:
+            return _empty_result()
+
+        score = primary.get("score")
+        if score is None:
+            return _empty_result()
+
+        white_pov = score.white()
+        eval_type = "cp"
+        mate_in   = None
+
+        if white_pov.is_mate():
+            eval_type = "mate"
+            mate_in   = white_pov.mate()
+            if mate_in == 0:
+                eval_cp = -10000 if board.turn == chess.WHITE else 10000
+            else:
+                eval_cp = 10000 if mate_in > 0 else -10000
+        else:
+            eval_cp = white_pov.score()
+
+        score_bar = cp_to_bar(eval_cp)
+
+        best_moves = []
+        for idx in sorted(lines.keys()):
+            pv_info = lines[idx]
+            pv = pv_info.get("pv", [])
+            if not pv:
+                continue
+            move = pv[0]
+            mv_score = pv_info.get("score")
+
+            mv_cp   = None
+            mv_type = "cp"
+            mv_mate = None
+            if mv_score:
+                mv_white = mv_score.white()
+                if mv_white.is_mate():
+                    mv_type = "mate"
+                    mv_mate = mv_white.mate()
+                    if mv_mate == 0:
                         board_after = board.copy()
                         board_after.push(move)
                         mv_cp = -10000 if board_after.turn == chess.WHITE else 10000
