@@ -3,7 +3,7 @@ import { Chessboard, ChessboardProvider } from 'react-chessboard'
 import { Chess } from 'chess.js'
 import { RotateCcw, RefreshCw, ArrowLeft, Undo2, Redo2, FlipVertical, Download } from 'lucide-react'
 import ScoreBar from './ScoreBar'
-import { analyze } from '../api/chess'
+import { analyzeStream } from '../api/chess'
 import { useSquareFit } from '../hooks/useSquareFit'
 
 // Arrow colors: green=best, blue=second, yellow=third
@@ -73,26 +73,36 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const canGoBack = currentIndex > 0
   const canGoForward = currentIndex < positionHistory.length - 1
 
-  const fetchEval = useCallback(async (fen, currentTurn) => {
+  const closeStreamRef = useRef(null)
+
+  const fetchEval = useCallback((fen, currentTurn) => {
     const requestId = ++analysisRequestId.current
+
+    // Close any in-flight stream from a previous position before starting
+    // a new one, so two analyses never race to update the UI at once.
+    closeStreamRef.current?.()
 
     setLoading(true)
 
-    try {
-      const res = await analyze(fen, currentTurn, 3)
-
-      if (requestId !== analysisRequestId.current) return
-
-      if (res.success) {
-        setEvalData(res)
-      }
-    } catch (e) {
-      console.error('Analysis failed:', e)
-    } finally {
-      if (requestId === analysisRequestId.current) {
+    closeStreamRef.current = analyzeStream(
+      fen,
+      currentTurn,
+      3,
+      (update) => {
+        if (requestId !== analysisRequestId.current) return
+        setEvalData(update)
+        if (update.done) setLoading(false)
+      },
+      (e) => {
+        if (requestId !== analysisRequestId.current) return
+        console.error('Analysis failed:', e)
         setLoading(false)
       }
-    }
+    )
+  }, [])
+
+  useEffect(() => {
+    return () => closeStreamRef.current?.()
   }, [])
 
   // Fetch eval whenever position changes -- debounced so that spamming
@@ -221,6 +231,8 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
     : []
 
   const evalCp   = evalData?.eval_cp   ?? null
+  const depth    = evalData?.depth     ?? null
+  const maxDepth = 40
   const evalType = evalData?.eval_type ?? 'cp'
   const mateIn   = evalData?.mate_in   ?? null
 
@@ -361,14 +373,21 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
         </div>
 
         {/* Score bar (always visible) */}
-        <div className="h-full" style={{ minHeight: 200 }}>
-          {loading ? (
+        <div className="h-full flex flex-col items-center" style={{ minHeight: 200 }}>
+          {!evalData ? (
             <div className="w-8 h-full flex items-center justify-center">
               <div className="w-3 h-3 border border-[#6B9E6B] border-t-transparent
                               rounded-full animate-spin" />
             </div>
           ) : (
-            <ScoreBar evalCp={evalCp} evalType={evalType} mateIn={mateIn} />
+            <>
+              <ScoreBar evalCp={evalCp} evalType={evalType} mateIn={mateIn} />
+              {loading && depth != null && (
+                <span className="text-[8px] text-[#8A8A8A] mt-1 whitespace-nowrap">
+                  d{depth}/{maxDepth}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>
