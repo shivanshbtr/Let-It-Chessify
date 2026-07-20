@@ -24,6 +24,37 @@ function arrowColor(hex, opacity) {
 const MODE_SCORE = 'score'
 const MODE_SUGGEST = 'suggest'
 
+// A drag is a promotion if a pawn is moving onto the back rank of the
+// opposite color. Checked against the actual piece at `from`, not just
+// square math, so it can't misfire on non-pawn moves.
+function isPromotionMove(game, from, to) {
+  const piece = game.get(from)
+  if (!piece || piece.type !== 'p') return false
+  const targetRank = to[1]
+  return (piece.color === 'w' && targetRank === '8') ||
+         (piece.color === 'b' && targetRank === '1')
+}
+
+// Pixel position (top-left corner) of a square within a `size`x`size`
+// board, accounting for board orientation -- same simple 8x8 grid math
+// the board itself uses internally, just re-derived here so the
+// promotion picker can anchor itself over the right square.
+function squareToPixel(square, orientation, size) {
+  const file = square.charCodeAt(0) - 97       // a-h -> 0-7
+  const rank = parseInt(square[1], 10) - 1     // 1-8 -> 0-7
+  const cell = size / 8
+  const col = orientation === 'white' ? file : 7 - file
+  const row = orientation === 'white' ? 7 - rank : rank
+  return { x: col * cell, y: row * cell, cell }
+}
+
+const PROMOTION_CHOICES = [
+  { piece: 'q', label: 'Queen',  glyph: { w: '♕', b: '♛' } },
+  { piece: 'r', label: 'Rook',   glyph: { w: '♖', b: '♜' } },
+  { piece: 'b', label: 'Bishop', glyph: { w: '♗', b: '♝' } },
+  { piece: 'n', label: 'Knight', glyph: { w: '♘', b: '♞' } },
+]
+
 // Normalize the detected starting position into a canonical FEN string.
 function normalizeInitialFen(initialFen) {
   const g = new Chess()
@@ -37,6 +68,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const [loading, setLoading]   = useState(false)
   const [timeLimitOn, setTimeLimitOn] = useState(true)
   const [boardOrientation, setBoardOrientation] = useState(turn === 'w' ? 'white' : 'black')
+  const [pendingPromotion, setPendingPromotion] = useState(null) // { from, to } | null
 
   // Position/move history is modeled as a single timeline with a cursor:
   //   positionHistory[0]      = starting position (FEN)
@@ -150,8 +182,21 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   // v5 callback signature: ({ piece, sourceSquare, targetSquare }) => boolean
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }) => {
     if (!targetSquare) return false
+    if (isPromotionMove(game, sourceSquare, targetSquare)) {
+      // Don't apply the move yet -- ask which piece first. Returning
+      // false here snaps the dragged piece back visually; the move only
+      // actually happens once a choice is made (see the picker below).
+      setPendingPromotion({ from: sourceSquare, to: targetSquare })
+      return false
+    }
     return makeMove({ from: sourceSquare, to: targetSquare })
-  }, [makeMove])
+  }, [makeMove, game])
+
+  const confirmPromotion = useCallback((piece) => {
+    if (!pendingPromotion) return
+    makeMove({ from: pendingPromotion.from, to: pendingPromotion.to, promotion: piece })
+    setPendingPromotion(null)
+  }, [pendingPromotion, makeMove])
 
   // Move suggestions mode: clicking a suggestion plays it
   const playSuggestion = (uci) => {
@@ -235,6 +280,15 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
         color:       arrowColor(ARROW_COLORS[i], ARROW_OPACITIES[i]),
       }))
     : []
+
+  // react-chessboard doesn't always clear its own arrow layer when the
+  // `arrows` prop shrinks or empties (e.g. switching to score-bar mode, or
+  // two best-move squares collapsing onto the same pair) -- an old arrow
+  // can visibly stick around on screen indefinitely. Forcing a full
+  // remount of the board whenever the actual arrow SET changes (not on
+  // every eval tick -- only when the squares involved differ) sidesteps
+  // that by never giving the library a chance to leave stale DOM behind.
+  const arrowsKey = `${mode}:${arrows.map(a => `${a.startSquare}${a.endSquare}`).join(',')}`
 
   const evalCp   = evalData?.eval_cp   ?? null
   const depth    = evalData?.depth     ?? null
@@ -378,8 +432,9 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
       <div className="flex gap-3 flex-1 min-h-0 items-start">
         <div ref={boardFitRef} className="flex-1 min-w-0 h-full flex items-center justify-center">
           {boardSize > 0 && (
-            <div style={{ width: boardSize, height: boardSize }}>
+            <div style={{ width: boardSize, height: boardSize, position: 'relative' }}>
               <ChessboardProvider
+                key={arrowsKey}
                 options={{
                   position: game.fen(),
                   onPieceDrop,
@@ -396,6 +451,45 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
               >
                 <Chessboard />
               </ChessboardProvider>
+
+              {pendingPromotion && (() => {
+                const { x, y, cell } = squareToPixel(pendingPromotion.to, boardOrientation, boardSize)
+                const color = pendingPromotion.to[1] === '8' ? 'w' : 'b'
+                // Stack downward from the target square, unless that would
+                // run off the bottom of the board -- then stack upward.
+                const stacksUp = y + cell * 4 > boardSize
+                return (
+                  <>
+                    {/* Backdrop -- click outside to cancel without moving */}
+                    <div
+                      className="absolute inset-0 z-10"
+                      onClick={() => setPendingPromotion(null)}
+                    />
+                    <div
+                      className="absolute z-20 flex flex-col rounded-lg overflow-hidden
+                                 border border-[#555] shadow-2xl bg-[#1a1a1a]"
+                      style={{
+                        left: x,
+                        top: stacksUp ? y - cell * 3 : y,
+                        width: cell,
+                      }}
+                    >
+                      {PROMOTION_CHOICES.map(({ piece, label, glyph }) => (
+                        <button
+                          key={piece}
+                          title={label}
+                          onClick={() => confirmPromotion(piece)}
+                          className="flex items-center justify-center hover:bg-[#6B9E6B]
+                                     transition-colors"
+                          style={{ width: cell, height: cell, fontSize: cell * 0.6 }}
+                        >
+                          {glyph[color]}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )
+              })()}
             </div>
           )}
         </div>
@@ -422,8 +516,11 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
       {/* Move history + controls */}
       <div className="flex items-center gap-3">
-        {/* Move history */}
-        <div className="flex-1 flex flex-wrap gap-1 min-h-6">
+        {/* Move history -- fixed height (~2 rows) so a long game scrolls
+            internally instead of growing this box and squeezing the
+            board's available space on every move. */}
+        <div className="flex-1 flex flex-wrap content-start gap-1 gap-y-1.5
+                         max-h-12 overflow-y-auto pr-1">
           {visibleMoves.map((mv, i) => (
             <span key={i} className="text-xs text-[#8A8A8A] font-mono">
               {i % 2 === 0 && (
