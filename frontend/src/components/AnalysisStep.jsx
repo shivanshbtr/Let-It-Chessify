@@ -281,14 +281,43 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
       }))
     : []
 
-  // react-chessboard doesn't always clear its own arrow layer when the
-  // `arrows` prop shrinks or empties (e.g. switching to score-bar mode, or
-  // two best-move squares collapsing onto the same pair) -- an old arrow
-  // can visibly stick around on screen indefinitely. Forcing a full
-  // remount of the board whenever the actual arrow SET changes (not on
-  // every eval tick -- only when the squares involved differ) sidesteps
-  // that by never giving the library a chance to leave stale DOM behind.
-  const arrowsKey = `${mode}:${arrows.map(a => `${a.startSquare}${a.endSquare}`).join(',')}`
+  // react-chessboard doesn't always clean up its own arrow layer when a
+  // specific arrow *disappears* between updates (e.g. switching to
+  // score-bar mode, or two best-move squares collapsing onto the same
+  // pair so there are fewer distinct arrows than before) -- the old one
+  // can visibly stick around indefinitely. It updates fine for ordinary
+  // changes (same or more distinct arrows, different squares), which is
+  // by far the common case during live analysis -- so we only force a
+  // full remount for the specific "something disappeared" case, not on
+  // every eval tick. That keeps arrows updating live, including while
+  // dragging a piece, and only defers the remount (never mid-drag, since
+  // that would kill the drag) for the rarer case that actually needs it.
+  const currentArrowKeys = useMemo(
+    () => new Set(arrows.map(a => `${a.startSquare}${a.endSquare}`)),
+    [arrows]
+  )
+  const [isDragging, setIsDragging] = useState(false)
+  const prevArrowKeysRef = useRef(currentArrowKeys)
+  const remountTickRef   = useRef(0)
+
+  const hadRemoval = [...prevArrowKeysRef.current].some(k => !currentArrowKeys.has(k))
+  if (hadRemoval && !isDragging) {
+    remountTickRef.current += 1
+  }
+  if (!isDragging) {
+    prevArrowKeysRef.current = currentArrowKeys
+  }
+  const boardKey = `${mode}-${remountTickRef.current}`
+
+  useEffect(() => {
+    const onDragEnd = () => setIsDragging(false)
+    window.addEventListener('mouseup', onDragEnd)
+    window.addEventListener('touchend', onDragEnd)
+    return () => {
+      window.removeEventListener('mouseup', onDragEnd)
+      window.removeEventListener('touchend', onDragEnd)
+    }
+  }, [])
 
   const evalCp   = evalData?.eval_cp   ?? null
   const depth    = evalData?.depth     ?? null
@@ -432,9 +461,13 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
       <div className="flex gap-3 flex-1 min-h-0 items-start">
         <div ref={boardFitRef} className="flex-1 min-w-0 h-full flex items-center justify-center">
           {boardSize > 0 && (
-            <div style={{ width: boardSize, height: boardSize, position: 'relative' }}>
+            <div
+              style={{ width: boardSize, height: boardSize, position: 'relative' }}
+              onMouseDown={() => setIsDragging(true)}
+              onTouchStart={() => setIsDragging(true)}
+            >
               <ChessboardProvider
-                key={arrowsKey}
+                key={boardKey}
                 options={{
                   position: game.fen(),
                   onPieceDrop,
