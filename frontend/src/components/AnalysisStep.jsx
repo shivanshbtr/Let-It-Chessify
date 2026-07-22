@@ -478,7 +478,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
                     borderRadius: '8px',
                     boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
                   },
-                  darkSquareStyle: { backgroundColor: '#4A3728' },
+                  darkSquareStyle: { backgroundColor: '#6B5240' },
                   lightSquareStyle: { backgroundColor: '#F5F0E8' },
                 }}
               >
@@ -549,11 +549,11 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
       {/* Move history + controls */}
       <div className="flex items-center gap-3">
-        {/* Move history -- fixed height (~2 rows) so a long game scrolls
+        {/* Move history -- fixed height (~1 row) so a long game scrolls
             internally instead of growing this box and squeezing the
             board's available space on every move. */}
-        <div className="flex-1 flex flex-wrap content-start gap-1 gap-y-1.5
-                         max-h-12 overflow-y-auto pr-1">
+        <div className="flex-1 flex flex-wrap content-start gap-1
+                         max-h-6 overflow-y-auto pr-1">
           {visibleMoves.map((mv, i) => (
             <span key={i} className="text-xs text-[#8A8A8A] font-mono">
               {i % 2 === 0 && (
