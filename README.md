@@ -330,3 +330,10 @@ This README covers the project as a whole. few folders have their own README wit
 - [Ultralytics](https://ultralytics.com/) — YOLOv8 training and inference
 - [react-chessboard](https://github.com/Clariity/react-chessboard) — interactive board component
 - [Stockfish](https://stockfishchess.org/) — open-source chess engine
+
+---
+
+## License
+
+MIT
+
