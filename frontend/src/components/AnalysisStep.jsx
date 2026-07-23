@@ -107,6 +107,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const canGoForward = currentIndex < positionHistory.length - 1
 
   const closeStreamRef = useRef(null)
+  const moveListRef = useRef(null)
 
   const fetchEval = useCallback((fen, currentTurn, unlimited) => {
     const requestId = ++analysisRequestId.current
@@ -330,6 +331,15 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   // timeline if the user has stepped back.
   const visibleMoves = sanHistory.slice(0, currentIndex)
 
+  // Keep the latest move in view by default -- scroll the list to the
+  // bottom whenever the visible move set changes (new move, undo/redo,
+  // jumping around history). The user can still scroll up manually to
+  // see earlier moves; this just resets to "show the latest" on change.
+  useEffect(() => {
+    const el = moveListRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [visibleMoves.length])
+
   return (
     <div className="flex flex-col h-full px-4 py-6 gap-4">
       {/* Header */}
@@ -552,7 +562,7 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
         {/* Move history -- fixed height (~1 row) so a long game scrolls
             internally instead of growing this box and squeezing the
             board's available space on every move. */}
-        <div className="flex-1 flex flex-wrap content-start gap-1
+        <div ref={moveListRef} className="flex-1 flex flex-wrap content-start gap-1
                          max-h-6 overflow-y-auto pr-1">
           {visibleMoves.map((mv, i) => (
             <span key={i} className="text-xs text-[#8A8A8A] font-mono">
