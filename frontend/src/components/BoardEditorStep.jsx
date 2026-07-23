@@ -149,7 +149,7 @@ export default function BoardEditorStep({
     boardOrientation: 'white',
     allowDrawingArrows: false,
     boardStyle: { borderRadius: '8px', boxShadow: '0 4px 24px rgba(0,0,0,0.4)' },
-    darkSquareStyle: { backgroundColor: '#4A3728' },
+    darkSquareStyle: { backgroundColor: '#6B5240' },
     lightSquareStyle: { backgroundColor: '#F5F0E8' },
   }
 
