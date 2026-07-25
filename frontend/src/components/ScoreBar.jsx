@@ -10,11 +10,16 @@ function cpToPercent(cp) {
   return 50 + 50 * (clamped / 1000) * (2 - Math.abs(clamped) / 1000)
 }
 
-export default function ScoreBar({ evalCp, evalType, mateIn }) {
+export default function ScoreBar({ evalCp, evalType, mateIn, gameOverResult }) {
   const isMate = evalType === 'mate'
 
   let whitePct
-  if (isMate) {
+  if (gameOverResult) {
+    // Fully filled toward whoever actually won -- 100/0, not the 98/2
+    // near-mate split used for an in-progress mating sequence. A draw
+    // (including stalemate) splits evenly since neither side "won" the bar.
+    whitePct = gameOverResult === '1-0' ? 100 : gameOverResult === '0-1' ? 0 : 50
+  } else if (isMate) {
     // Use evalCp's sign, not mateIn's. evalCp is always a clean ±10000 for
     // a mate eval and is never itself 0 -- whereas mateIn CAN legitimately
     // be 0 (an already-checkmated position), and plain 0 has no sign to
@@ -30,7 +35,9 @@ export default function ScoreBar({ evalCp, evalType, mateIn }) {
   const labelTop = Math.min(92, Math.max(8, blackPct))
 
   let label
-  if (isMate) {
+  if (gameOverResult) {
+    label = gameOverResult
+  } else if (isMate) {
     label = `M${Math.abs(mateIn)}`
   } else if (evalCp === null || evalCp === undefined) {
     label = '0.0'
