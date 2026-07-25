@@ -106,6 +106,20 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const canGoBack = currentIndex > 0
   const canGoForward = currentIndex < positionHistory.length - 1
 
+  // Result for the CURRENTLY VIEWED position specifically -- derived fresh
+  // from `game` every render, so it's automatically correct (and
+  // automatically absent) when stepping back/forward through history.
+  // Checkmate/stalemate only ever apply to the exact position they occur
+  // in; navigating away from it and `game` itself reflects that.
+  const gameOverResult = useMemo(() => {
+    if (!game.isGameOver()) return null
+    if (game.isCheckmate()) {
+      // The side TO MOVE is the one with no legal moves -- i.e. the loser.
+      return game.turn() === 'w' ? '0-1' : '1-0'
+    }
+    return '1/2-1/2' // stalemate, insufficient material, threefold, 50-move
+  }, [game])
+
   const closeStreamRef = useRef(null)
   const moveListRef = useRef(null)
 
@@ -154,12 +168,21 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   // whatever position is currently showing, immediately reflecting the
   // new mode rather than waiting for the next move.
   useEffect(() => {
+    if (gameOverResult) {
+      // Nothing to analyze -- no legal moves exist in this position.
+      // Cancel anything still running and clear stale data so an old
+      // eval/arrows from the position just before mate don't linger.
+      closeStreamRef.current?.()
+      setEvalData(null)
+      setLoading(false)
+      return
+    }
     const t = game.turn()
     const timeoutId = setTimeout(() => {
       fetchEval(currentFen, t, !timeLimitOn)
     }, 300)
     return () => clearTimeout(timeoutId)
-  }, [currentFen, fetchEval, timeLimitOn])
+  }, [currentFen, fetchEval, timeLimitOn, gameOverResult])
 
   // Apply a move to the current position. Used both for dragging pieces on
   // the board and for clicking a suggested move -- the board should always
@@ -539,14 +562,14 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
 
         {/* Score bar (always visible) */}
         <div className="h-full flex flex-col items-center" style={{ minHeight: 200 }}>
-          {!evalData ? (
+          {!evalData && !gameOverResult ? (
             <div className="w-8 h-full flex items-center justify-center">
               <div className="w-3 h-3 border border-[#6B9E6B] border-t-transparent
                               rounded-full animate-spin" />
             </div>
           ) : (
             <>
-              <ScoreBar evalCp={evalCp} evalType={evalType} mateIn={mateIn} />
+              <ScoreBar evalCp={evalCp} evalType={evalType} mateIn={mateIn} gameOverResult={gameOverResult} />
               {loading && depth != null && (
                 <span className="text-[8px] text-[#8A8A8A] mt-1 whitespace-nowrap">
                   d{depth}/{maxDepth}
