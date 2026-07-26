@@ -49,6 +49,26 @@ def labels_to_fen(square_labels, turn="w"):
 
     board.turn = chess.WHITE if turn == "w" else chess.BLACK
 
+    # Default castling rights to whatever is geometrically possible (king
+    # and the relevant rook still on their home squares) instead of
+    # always leaving this disabled. A static OCR'd image can't know true
+    # game history (a rook could've moved away and back), so this mirrors
+    # what any board editor does: assume available unless proven
+    # otherwise. The frontend's turn-select step offers a final
+    # confirm/override on top of this.
+    rights = 0
+    if board.piece_at(chess.E1) == chess.Piece(chess.KING, chess.WHITE):
+        if board.piece_at(chess.H1) == chess.Piece(chess.ROOK, chess.WHITE):
+            rights |= chess.BB_H1
+        if board.piece_at(chess.A1) == chess.Piece(chess.ROOK, chess.WHITE):
+            rights |= chess.BB_A1
+    if board.piece_at(chess.E8) == chess.Piece(chess.KING, chess.BLACK):
+        if board.piece_at(chess.H8) == chess.Piece(chess.ROOK, chess.BLACK):
+            rights |= chess.BB_H8
+        if board.piece_at(chess.A8) == chess.Piece(chess.ROOK, chess.BLACK):
+            rights |= chess.BB_A8
+    board.castling_rights = rights
+
     warnings = validate_position(board)
     return board.fen(), warnings
 
