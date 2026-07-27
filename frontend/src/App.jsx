@@ -180,6 +180,26 @@ export default function App() {
     }
   }, [])
 
+  // Import a FEN and jump straight to analysis from that exact position --
+  // mirrors handleStartFromScratch, but starting from a custom position
+  // instead of the standard one. Whoever's turn the FEN encodes is used as
+  // the analysis turn, and the position stays editable afterwards via the
+  // Editor/Turn steps.
+  const handleImportFen = useCallback((fenText) => {
+    clearError()
+    try {
+      const g = new Chess(fenText)
+      const fen = g.fen()
+      setSquareLabels(fenToSquareLabels(fen))
+      setWarnings([])
+      setConfirmedFen(fen)
+      setAnalysisData({ fen, turn: g.turn() })
+      setStep(STEP.ANALYSIS)
+    } catch (e) {
+      setError('Could not read that FEN. Double-check the format and try again.')
+    }
+  }, [])
+
   const handleReset = useCallback(() => {
     setStep(STEP.UPLOAD)
     setOverlayB64(null); setOriginalB64(null)
@@ -218,6 +238,7 @@ export default function App() {
               onUpload={handleUpload}
               onStartFromScratch={handleStartFromScratch}
               onImportPgn={handleImportPgn}
+              onImportFen={handleImportFen}
               loading={loading}
             />
           )}
