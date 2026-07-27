@@ -72,7 +72,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-full gap-8 px-4 py-12 relative">
+    <div className="flex flex-col items-center justify-center min-h-full gap-10 px-4 py-12 relative">
       {onBack && (
         <button
           onClick={onBack}
@@ -85,58 +85,68 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
       )}
 
       <div className="text-center">
-        <h2 className="font-display text-3xl font-semibold text-[#F5F0E8] mb-2">
-          Who moves next?
-        </h2>
+        <h1 className="font-display text-3xl font-semibold text-[#F5F0E8] mb-2">
+          Set up the position
+        </h1>
         <p className="text-[#8A8A8A] text-sm">
-          Select the side to move before analysis begins.
+          Confirm the side to move and any remaining castling rights.
         </p>
       </div>
 
-      {/* Turn selector */}
-      <div className="flex gap-4">
-        <button
-          onClick={() => setTurn('w')}
-          className={`flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2
-                      transition-all duration-200 ${
-            turn === 'w'
-              ? 'border-[#F5F0E8] bg-[#F5F0E8]/10 scale-105'
-              : 'border-[#333] bg-[#242424] hover:border-[#555]'
-          }`}
-        >
-          <span className="text-5xl">♔</span>
-          <span className={`text-sm font-medium ${turn === 'w' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
-            White
-          </span>
-        </button>
+      {/* Section 1: Turn selector */}
+      <section className="w-full max-w-lg flex flex-col items-center gap-4">
+        <h2 className="font-display text-lg font-semibold text-[#F5F0E8]">
+          Who moves next?
+        </h2>
+        <div className="flex gap-4">
+          <button
+            onClick={() => setTurn('w')}
+            className={`flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2
+                        transition-all duration-200 ${
+              turn === 'w'
+                ? 'border-[#F5F0E8] bg-[#F5F0E8]/10 scale-105'
+                : 'border-[#333] bg-[#242424] hover:border-[#555]'
+            }`}
+          >
+            <span className="text-5xl">♔</span>
+            <span className={`text-sm font-medium ${turn === 'w' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
+              White
+            </span>
+          </button>
 
-        <button
-          onClick={() => setTurn('b')}
-          className={`flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2
-                      transition-all duration-200 ${
-            turn === 'b'
-              ? 'border-[#6B9E6B] bg-[#6B9E6B]/10 scale-105'
-              : 'border-[#333] bg-[#242424] hover:border-[#555]'
-          }`}
-        >
-          <span className="text-5xl">♚</span>
-          <span className={`text-sm font-medium ${turn === 'b' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
-            Black
-          </span>
-        </button>
-      </div>
+          <button
+            onClick={() => setTurn('b')}
+            className={`flex flex-col items-center gap-3 px-8 py-6 rounded-2xl border-2
+                        transition-all duration-200 ${
+              turn === 'b'
+                ? 'border-[#6B9E6B] bg-[#6B9E6B]/10 scale-105'
+                : 'border-[#333] bg-[#242424] hover:border-[#555]'
+            }`}
+          >
+            <span className="text-5xl">♚</span>
+            <span className={`text-sm font-medium ${turn === 'b' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
+              Black
+            </span>
+          </button>
+        </div>
+      </section>
 
-      {/* Castling rights -- only shown when at least one is geometrically
-          possible given where the king/rooks actually are. */}
+      {/* Divider between the two equally-weighted sections */}
+      {anyPossible && <div className="w-full max-w-lg h-px bg-[#333]" />}
+
+      {/* Section 2: Castling rights -- only shown when at least one is
+          geometrically possible given where the king/rooks actually are.
+          Given the same heading treatment as "Who moves next?" above so
+          neither section reads as the primary one. */}
       {anyPossible && (
-        <div className="w-full max-w-lg">
-          <p className="text-[#8A8A8A] text-xs uppercase tracking-wider mb-2 text-center">
+        <section className="w-full max-w-lg flex flex-col items-center gap-4">
+          <h2 className="font-display text-lg font-semibold text-[#F5F0E8]">
             Castling still available?
-          </p>
+          </h2>
           <div className="flex justify-center gap-8">
             {(possible.K || possible.Q) && (
-              <div className="flex flex-col gap-2">
-                <span className="text-[#F5F0E8] text-xs font-medium mb-0.5">White</span>
+              <div className="flex flex-col gap-2 px-6 py-4 rounded-2xl border-2 border-[#333] bg-[#242424]">
+                <span className="text-[#F5F0E8] text-xs font-medium mb-0.5 uppercase tracking-wider">White</span>
                 {possible.K && (
                   <label className="flex items-center gap-2 text-sm text-[#8A8A8A] cursor-pointer">
                     <input
@@ -162,8 +172,8 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
               </div>
             )}
             {(possible.k || possible.q) && (
-              <div className="flex flex-col gap-2">
-                <span className="text-[#F5F0E8] text-xs font-medium mb-0.5">Black</span>
+              <div className="flex flex-col gap-2 px-6 py-4 rounded-2xl border-2 border-[#333] bg-[#242424]">
+                <span className="text-[#F5F0E8] text-xs font-medium mb-0.5 uppercase tracking-wider">Black</span>
                 {possible.k && (
                   <label className="flex items-center gap-2 text-sm text-[#8A8A8A] cursor-pointer">
                     <input
@@ -189,7 +199,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
               </div>
             )}
           </div>
-        </div>
+        </section>
       )}
 
       {/* FEN display */}
