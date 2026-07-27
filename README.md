@@ -22,6 +22,7 @@ Let It Chessify is a fully offline chess board recognition and analysis tool. Po
 - **Board editor** — drag pieces between squares, right-click to remove, click a palette piece to add; flip the board 180° if the camera was from the wrong side
 - **Stockfish analysis** — score bar mode (play moves freely, bar updates after each move) and move suggestion mode (top 3 moves as green / blue / yellow arrows with eval lines)
 - **PGN import** — paste a PGN string and browse the game move by move in the analysis board
+- **FEN import** — Paste a FEN string to load the corresponding position directly into the Analysis Board.
 - **Fully offline** — all models run locally; no images or moves are sent to any server
 
 ---
