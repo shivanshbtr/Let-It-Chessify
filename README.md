@@ -107,7 +107,7 @@ Let-It-Chessify/
 │   │       ├── UploadStep.jsx      # Image upload + Screenshot/Physical toggle
 │   │       ├── CornerConfirmStep.jsx  # Grid overlay + draggable corners
 │   │       ├── BoardEditorStep.jsx    # Piece drag/drop editor + palette
-│   │       ├── TurnSelectStep.jsx     # Who moves next
+│   │       ├── TurnSelectStep.jsx     # Who moves next, castling if available, en passant if available
 │   │       ├── AnalysisStep.jsx       # Score bar + move suggestions
 │   │       ├── ScoreBar.jsx           # Vertical centipawn bar
 │   │       └── StepIndicator.jsx      # Left sidebar progress
