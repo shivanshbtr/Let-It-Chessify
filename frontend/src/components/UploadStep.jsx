@@ -1,14 +1,18 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Upload, Camera, MonitorSmartphone, Swords, FileUp, FolderOpen, X } from 'lucide-react'
+import { Upload, Camera, MonitorSmartphone, Swords, FileUp, FolderOpen, X, FileText } from 'lucide-react'
 
-export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, loading }) {
+export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, onImportFen, loading }) {
   const [isDragging, setIsDragging] = useState(false)
   const [isPhysical, setIsPhysical] = useState(false)
   const [showPgnPanel, setShowPgnPanel] = useState(false)
   const [pgnText, setPgnText] = useState('')
+  const [showFenPanel, setShowFenPanel] = useState(false)
+  const [fenText, setFenText] = useState('')
   const pgnFileInputRef = useRef(null)
   const pgnPanelRef = useRef(null)
   const pgnTextareaRef = useRef(null)
+  const fenPanelRef = useRef(null)
+  const fenInputRef = useRef(null)
 
   // Scroll the paste box into view (and focus it) the moment it opens --
   // the panel renders below the fold on shorter viewports, so without this
@@ -21,6 +25,16 @@ export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, 
     })
     return () => cancelAnimationFrame(raf)
   }, [showPgnPanel])
+
+  // Same behavior as the PGN panel above, for the FEN panel.
+  useEffect(() => {
+    if (!showFenPanel) return
+    const raf = requestAnimationFrame(() => {
+      fenPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      fenInputRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [showFenPanel])
 
   const handleFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -41,6 +55,11 @@ export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, 
     if (!pgnText.trim() || !onImportPgn) return
     onImportPgn(pgnText)
   }, [pgnText, onImportPgn])
+
+  const submitFen = useCallback(() => {
+    if (!fenText.trim() || !onImportFen) return
+    onImportFen(fenText.trim())
+  }, [fenText, onImportFen])
 
   const onPgnFileInput = useCallback((e) => {
     const file = e.target.files[0]
@@ -117,6 +136,32 @@ export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, 
               style={{ color: 'var(--stone)' }}
             >
               Import PGN
+            </span>
+          </button>
+        )}
+        {onImportFen && (
+          <button
+            onClick={() => setShowFenPanel((v) => !v)}
+            disabled={loading}
+            title="Import FEN"
+            className="flex flex-col items-center gap-1.5 group
+                       disabled:opacity-40 disabled:pointer-events-none"
+          >
+            <span
+              className="w-10 h-10 rounded-full flex items-center justify-center
+                         transition-transform duration-150 group-hover:scale-110"
+              style={{
+                background: showFenPanel ? 'var(--felt)' : 'var(--walnut-raised)',
+                border: `1px solid ${showFenPanel ? 'var(--felt-bright)' : 'var(--hairline)'}`,
+              }}
+            >
+              <FileText size={16} style={{ color: showFenPanel ? 'var(--ivory)' : 'var(--brass)' }} />
+            </span>
+            <span
+              className="text-[9px] uppercase tracking-wider text-center leading-tight max-w-[68px]"
+              style={{ color: 'var(--stone)' }}
+            >
+              Import FEN
             </span>
           </button>
         )}
@@ -275,6 +320,18 @@ export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, 
                 Import PGN
               </button>
             )}
+            {onImportFen && (
+              <button
+                onClick={() => setShowFenPanel((v) => !v)}
+                disabled={loading}
+                className="flex items-center gap-2 text-sm font-medium transition-colors
+                           disabled:opacity-50 disabled:pointer-events-none"
+                style={{ color: 'var(--brass)' }}
+              >
+                <FileText size={14} />
+                Import FEN
+              </button>
+            )}
           </div>
 
           {showPgnPanel && onImportPgn && (
@@ -340,6 +397,55 @@ export default function UploadStep({ onUpload, onStartFromScratch, onImportPgn, 
                   onChange={onPgnFileInput}
                 />
               </div>
+            </div>
+          )}
+
+          {showFenPanel && onImportFen && (
+            <div
+              ref={fenPanelRef}
+              className="w-full max-w-lg rounded-xl p-4 flex flex-col gap-3"
+              style={{ background: 'var(--walnut-raised)', border: '1px solid var(--hairline)' }}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium" style={{ color: 'var(--stone)' }}>
+                  Paste a FEN string
+                </p>
+                <button
+                  onClick={() => setShowFenPanel(false)}
+                  className="text-[#8A8A8A] hover:text-[#F5F0E8] transition-colors"
+                  aria-label="Close"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <input
+                ref={fenInputRef}
+                type="text"
+                value={fenText}
+                onChange={(e) => setFenText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitFen() }}
+                placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                className="w-full rounded-lg px-3 py-2 text-xs font-mono
+                           focus:outline-none"
+                style={{
+                  background: 'var(--walnut)',
+                  border: '1px solid var(--hairline)',
+                  color: 'var(--ivory)',
+                }}
+              />
+
+              <button
+                onClick={submitFen}
+                disabled={!fenText.trim()}
+                className="flex items-center justify-center gap-1.5 text-sm font-medium
+                           px-4 py-2 rounded-lg transition-all disabled:opacity-40
+                           disabled:pointer-events-none"
+                style={{ background: 'var(--felt)', color: 'var(--ivory)' }}
+              >
+                <Swords size={13} />
+                Analyse this position
+              </button>
             </div>
           )}
         </div>
