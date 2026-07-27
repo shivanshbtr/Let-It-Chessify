@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Chessboard, ChessboardProvider } from 'react-chessboard'
 import { Chess } from 'chess.js'
-import { RotateCcw, RefreshCw, ArrowLeft, Undo2, Redo2, FlipVertical, Download } from 'lucide-react'
+import { RotateCcw, RefreshCw, ArrowLeft, Undo2, Redo2, FlipVertical, Download, ClipboardCopy, Check, X } from 'lucide-react'
 import ScoreBar from './ScoreBar'
 import { analyzeStream } from '../api/chess'
 import { useSquareFit } from '../hooks/useSquareFit'
@@ -69,6 +69,8 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
   const [timeLimitOn, setTimeLimitOn] = useState(true)
   const [boardOrientation, setBoardOrientation] = useState(turn === 'w' ? 'white' : 'black')
   const [pendingPromotion, setPendingPromotion] = useState(null) // { from, to } | null
+  const [showFenDisplay, setShowFenDisplay] = useState(false)
+  const [fenCopied, setFenCopied] = useState(false)
 
   // Position/move history is modeled as a single timeline with a cursor:
   //   positionHistory[0]      = starting position (FEN)
@@ -264,6 +266,18 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
       console.error('PGN export failed:', e)
     }
   }, [positionHistory, sanHistory])
+
+  // Copy the FEN of the currently-viewed position (not necessarily the
+  // final one -- respects Back/Forward navigation) to the clipboard, with
+  // a brief "Copied" confirmation on the button itself.
+  const copyFen = useCallback(() => {
+    navigator.clipboard.writeText(currentFen)
+      .then(() => {
+        setFenCopied(true)
+        setTimeout(() => setFenCopied(false), 1500)
+      })
+      .catch((e) => console.error('FEN copy failed:', e))
+  }, [currentFen])
 
   // Take back the last move. Repeatable -- each call steps back one ply,
   // all the way to the original detected position.
@@ -673,7 +687,47 @@ export default function AnalysisStep({ fen: initialFen, turn, initialHistory, on
           <Download size={12} />
           Export PGN
         </button>
+
+        {/* Reveal the current position's FEN with a copy/close panel */}
+        <button
+          onClick={() => setShowFenDisplay(true)}
+          title="Generate FEN"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#333]
+                     text-[#8A8A8A] hover:text-[#F5F0E8] hover:border-[#555]
+                     transition-all text-xs flex-shrink-0"
+        >
+          <ClipboardCopy size={12} />
+          Generate FEN
+        </button>
       </div>
+
+      {/* FEN display panel -- shows the currently-viewed position's FEN
+          with a copy button, dismissed via Close without leaving the
+          existing toolbar/board layout. */}
+      {showFenDisplay && (
+        <div className="w-full flex flex-col gap-2 px-3 py-2.5 rounded-lg border border-[#333]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-[#8A8A8A]">Position FEN</p>
+            <button
+              onClick={() => setShowFenDisplay(false)}
+              className="text-[#8A8A8A] hover:text-[#F5F0E8] transition-colors"
+              aria-label="Close"
+            >
+              <X size={13} />
+            </button>
+          </div>
+          <p className="text-xs font-mono text-[#F5F0E8] break-all">{currentFen}</p>
+          <button
+            onClick={copyFen}
+            className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#333]
+                       text-[#8A8A8A] hover:text-[#F5F0E8] hover:border-[#555]
+                       transition-all text-xs"
+          >
+            {fenCopied ? <Check size={12} /> : <ClipboardCopy size={12} />}
+            {fenCopied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      )}
 
       {/* Mode hint */}
       <p className="text-[#555] text-xs">
