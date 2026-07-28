@@ -332,53 +332,165 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
             </h2>
             <p className="text-[#8A8A8A] text-xs text-center max-w-xs">
               {epSquare
-                ? `Selected: capture on ${epSquare}. Tap it again to clear.`
-                : 'If an opposing pawn just advanced two squares, tap the highlighted square behind it. [otherwise leave blank]'}
+                ? `${epSquare} is eligible for en passant. Tap again to clear.`
+                : "If any of the shown moves was the opponent's just-previous move, tap the highlighted square behind it."}
             </p>
 
             <div
-              className="grid w-48 h-48 rounded-lg overflow-hidden border-2 border-[#333]"
-              style={{ gridTemplateColumns: 'repeat(8, 1fr)', gridTemplateRows: 'repeat(8, 1fr)' }}
+              className="relative w-48 h-48 rounded-lg overflow-hidden"
+              style={{ outline: '2px solid #333', outlineOffset: '-2px' }}
             >
-              {boardGrid.map((row, rowIdx) =>
-                row.map((piece, colIdx) => {
-                  const square = String.fromCharCode(97 + colIdx) + (8 - rowIdx)
-                  const isLight = (rowIdx + colIdx) % 2 === 0
-                  const isCandidate = epCandidateSquares.has(square)
-                  const isSelected = epSquare === square
-                  return (
-                    <button
-                      key={square}
-                      type="button"
-                      disabled={!isCandidate}
-                      onClick={() => setEpSquare(isSelected ? null : square)}
-                      className="relative flex items-center justify-center text-base leading-none"
-                      style={{
-                        backgroundColor: isSelected ? '#2F80ED' : isLight ? '#a58e69' : '#7e6351',
-                        cursor: isCandidate ? 'pointer' : 'default',
-                      }}
-                    >
-                      {piece && (
-                        <span style={{ color: piece === piece.toUpperCase() ? '#f4f3f2' : '#1a1a1a',
-                          fontSize: '20px'
-                        }}>
-                          {PIECE_GLYPHS[piece]}
-                        </span>
-                      )}
-                      {isCandidate && !isSelected && (
-                        <span
-                          className="absolute inset-[6px] rounded-full pointer-events-none"
-                          style={{
-                            background: isLight
-                              ? 'rgba(47,128,237,0.7)'
-                              : 'linear-gradient(rgba(47,128,237,0.7), rgba(47,128,237,0.7)), #a58e69',
-                            boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 0 0 2.5px #2F80ED',
-                          }}
-                        />
-                      )}
-                    </button>
-                  )
-                })
+              {/* Layer 1: board squares + pieces (bottom). Left at their
+                  natural colors -- the highlight lives entirely in the
+                  wash layer above, so it's fine (expected, even) that a
+                  translucent wash reads a little differently over the
+                  light vs. dark square underneath, the same way it does
+                  on any chess site. */}
+              <div
+                className="grid w-full h-full"
+                style={{ gridTemplateColumns: 'repeat(8, 1fr)', gridTemplateRows: 'repeat(8, 1fr)' }}
+              >
+                {boardGrid.map((row, rowIdx) =>
+                  row.map((piece, colIdx) => {
+                    const square = String.fromCharCode(97 + colIdx) + (8 - rowIdx)
+                    const isLight = (rowIdx + colIdx) % 2 === 0
+                    const isCandidate = epCandidateSquares.has(square)
+                    const isSelected = epSquare === square
+                    return (
+                      <button
+                        key={square}
+                        type="button"
+                        disabled={!isCandidate}
+                        onClick={() => setEpSquare(isSelected ? null : square)}
+                        className="relative flex items-center justify-center text-base leading-none"
+                        style={{
+                          backgroundColor: isLight ? '#a58e69' : '#7e6351',
+                          cursor: isCandidate ? 'pointer' : 'default',
+                        }}
+                      >
+                        {piece && (
+                          <span style={{ color: piece === piece.toUpperCase() ? '#f4f3f2' : '#1a1a1a',
+                            fontSize: '20px'
+                          }}>
+                            {PIECE_GLYPHS[piece]}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Layer 2: a single accent color (the app's own brass/gold)
+                  used as a translucent wash over the whole square --
+                  dim for an unselected candidate, a stronger fill with a
+                  bright edge once selected so the before/after click is
+                  clearly visible even against a light square whose base
+                  tone is already close to brass. Clipped with the same
+                  rounding as the board so it can't poke past the corner
+                  border on edge squares. */}
+              <div className="absolute inset-0 rounded-lg overflow-hidden pointer-events-none">
+                {boardGrid.map((row, rowIdx) =>
+                  row.map((piece, colIdx) => {
+                    const square = String.fromCharCode(97 + colIdx) + (8 - rowIdx)
+                    const isLight = (rowIdx + colIdx) % 2 === 0
+                    const isCandidate = epCandidateSquares.has(square)
+                    const isSelected = epSquare === square
+                    if (!isCandidate) return null
+                    const cell = 24
+                    const opacity = isSelected ? 0.97 : (isLight ? 0.55 : 0.5)
+                    return (
+                      <span
+                        key={square}
+                        className="absolute"
+                        style={{
+                          left: colIdx * cell,
+                          top: rowIdx * cell,
+                          width: cell,
+                          height: cell,
+                          backgroundColor: `rgba(201,161,92,${opacity})`,
+                          boxShadow: isSelected ? 'inset 0 0 0 2px rgba(245,240,232,0.9)' : 'none',
+                        }}
+                      />
+                    )
+                  })
+                )}
+              </div>
+
+              {/* Layer 3: arrows from each just-pushed candidate pawn's home
+                  rank to its current square, showing the double push that
+                  was just played. Drawn as a solid filled shape (shaft +
+                  head) rather than a stroked line, in a deeper brass tone
+                  so it reads clearly against the lighter gold wash below
+                  it. Hidden once a square is selected. */}
+              {!epSquare && (
+                <svg
+                  className="absolute inset-0 pointer-events-none"
+                  viewBox="0 0 192 192"
+                  width="192"
+                  height="192"
+                >
+                  {epCandidates.map(({ square, pawnSquare }) => {
+                    const cell = 24
+                    const centerOf = (sq) => {
+                      const file = sq.charCodeAt(0) - 97
+                      const rank = parseInt(sq[1], 10)
+                      const rowIdx = 8 - rank
+                      return { x: file * cell + cell / 2, y: rowIdx * cell + cell / 2 }
+                    }
+                    // The pawn's own home rank -- two ranks behind its
+                    // current square -- is where it just double-pushed
+                    // from, so the arrow spans that whole move rather
+                    // than the single square to the ep target.
+                    const originRank = turn === 'w' ? '7' : '2'
+                    const originSquare = pawnSquare[0] + originRank
+                    const from = centerOf(originSquare)
+                    const to = centerOf(pawnSquare)
+                    // Start exactly at the origin square's center; shorten
+                    // only the destination end so the tip sits just shy of
+                    // the pawn's square center rather than landing right
+                    // on top of the piece.
+                    const dx = to.x - from.x
+                    const dy = to.y - from.y
+                    const len = Math.hypot(dx, dy) || 1
+                    const endPad = 9
+                    const tipX = to.x - (dx / len) * endPad
+                    const tipY = to.y - (dy / len) * endPad
+
+                    // Build a tapered arrow polygon (shaft + triangular
+                    // head) instead of a stroked line + marker, so it
+                    // reads as one solid shape.
+                    const ux = dx / len
+                    const uy = dy / len
+                    const px = -uy
+                    const py = ux
+                    const shaftHalf = 1.6
+                    const headHalf = 4.5
+                    const headLength = 8
+                    const headBaseX = tipX - ux * headLength
+                    const headBaseY = tipY - uy * headLength
+                    const points = [
+                      [from.x + px * shaftHalf, from.y + py * shaftHalf],
+                      [headBaseX + px * shaftHalf, headBaseY + py * shaftHalf],
+                      [headBaseX + px * headHalf, headBaseY + py * headHalf],
+                      [tipX, tipY],
+                      [headBaseX - px * headHalf, headBaseY - py * headHalf],
+                      [headBaseX - px * shaftHalf, headBaseY - py * shaftHalf],
+                      [from.x - px * shaftHalf, from.y - py * shaftHalf],
+                    ].map((p) => p.join(',')).join(' ')
+
+                    return (
+                      <polygon
+                        key={`${pawnSquare}-${square}`}
+                        points={points}
+                        fill="#7C6640"
+                        stroke="#F5F0E8"
+                        strokeWidth="0.5"
+                        strokeOpacity="0.4"
+                      />
+                    )
+                  })}
+                </svg>
               )}
             </div>
           </section>
