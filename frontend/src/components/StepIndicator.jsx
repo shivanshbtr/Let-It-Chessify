@@ -2,7 +2,7 @@ const STEPS = [
   { id: 1, label: 'Upload' },
   { id: 2, label: 'Grid' },
   { id: 3, label: 'Editor' },
-  { id: 4, label: 'Turn' },
+  { id: 4, label: 'Final Setup' },
   { id: 5, label: 'Analysis' },
 ]
 
