@@ -60,17 +60,32 @@ function findEnPassantCandidates(boardFen, turn) {
   const results = []
   const rank = turn === 'w' ? '5' : '4'
   const targetRank = turn === 'w' ? '6' : '3'
+  const originRank = turn === 'w' ? '7' : '2'   // the pawn's own home rank
   const pawnChar = turn === 'w' ? 'p' : 'P'   // the side that just double-pushed
   const adjChar = turn === 'w' ? 'P' : 'p'    // the side that would capture
   for (let file = 0; file < 8; file++) {
-    const sq = String.fromCharCode(97 + file) + rank
+    const fileChar = String.fromCharCode(97 + file)
+    const sq = fileChar + rank
     if (pieceAt(boardFen, sq) !== pawnChar) continue
+
+    // A pawn can only have JUST double-pushed if its origin square (two
+    // ranks further back, on its own home rank) is empty. If something's
+    // sitting there, this pawn can't have moved from there on the
+    // immediately preceding move -- it's simply been on this rank for a
+    // while, and en passant no longer applies.
+    if (pieceAt(boardFen, fileChar + originRank) !== null) continue
+
+    const targetSq = fileChar + targetRank
+    // The square it passed over (the en passant target itself) must also
+    // have been empty for the double push to have been legal at all.
+    if (pieceAt(boardFen, targetSq) !== null) continue
+
     const left = file - 1, right = file + 1
     const hasAdjacentCapturer =
       (left >= 0 && pieceAt(boardFen, String.fromCharCode(97 + left) + rank) === adjChar) ||
       (right <= 7 && pieceAt(boardFen, String.fromCharCode(97 + right) + rank) === adjChar)
     if (hasAdjacentCapturer) {
-      results.push({ square: String.fromCharCode(97 + file) + targetRank, pawnSquare: sq })
+      results.push({ square: targetSq, pawnSquare: sq })
     }
   }
   return results
@@ -164,8 +179,14 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
               : 'border-[#333] bg-[#242424] hover:border-[#555]'
           }`}
         >
-          <span className="text-4xl">♔</span>
-          <span className={`text-sm font-medium ${turn === 'w' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
+          <span className="text-4xl">♚</span>
+          <span
+            className="text-sm font-medium px-3 py-0.5 rounded-full"
+            style={{
+              background: turn === 'w' ? '#F5F0E8' : '#8A8A8A',
+              color: '#1a1a1a',
+            }}
+          >
             White
           </span>
         </button>
@@ -175,12 +196,18 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
           className={`flex flex-col items-center gap-2 px-6 py-5 rounded-2xl border-2
                       transition-all duration-200 ${
             turn === 'b'
-              ? 'border-[#6B9E6B] bg-[#6B9E6B]/10 scale-105'
+              ? 'border-[#F5F0E8] bg-[#F5F0E8]/10 scale-105'
               : 'border-[#333] bg-[#242424] hover:border-[#555]'
           }`}
         >
-          <span className="text-4xl">♚</span>
-          <span className={`text-sm font-medium ${turn === 'b' ? 'text-[#F5F0E8]' : 'text-[#8A8A8A]'}`}>
+          <span className="text-4xl">♔</span>
+          <span
+            className="text-sm font-medium px-3 py-0.5 rounded-full"
+            style={{
+              background: '#1a1a1a',
+              color: turn === 'b' ? '#F5F0E8' : '#8A8A8A',
+            }}
+          >
             Black
           </span>
         </button>
@@ -203,7 +230,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                   type="checkbox"
                   checked={castling.K}
                   onChange={() => toggleCastling('K')}
-                  className="accent-[#6B9E6B]"
+                  className="accent-[#D8D4C8]"
                 />
                 Kingside (O-O)
               </label>
@@ -214,7 +241,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                   type="checkbox"
                   checked={castling.Q}
                   onChange={() => toggleCastling('Q')}
-                  className="accent-[#6B9E6B]"
+                  className="accent-[#D8D4C8]"
                 />
                 Queenside (O-O-O)
               </label>
@@ -230,7 +257,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                   type="checkbox"
                   checked={castling.k}
                   onChange={() => toggleCastling('k')}
-                  className="accent-[#6B9E6B]"
+                  className="accent-[#D8D4C8]"
                 />
                 Kingside (O-O)
               </label>
@@ -241,7 +268,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                   type="checkbox"
                   checked={castling.q}
                   onChange={() => toggleCastling('q')}
-                  className="accent-[#6B9E6B]"
+                  className="accent-[#D8D4C8]"
                 />
                 Queenside (O-O-O)
               </label>
@@ -278,7 +305,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
           vertical space, avoids scrolling) -- turn alone, centered,
           when it doesn't. */}
       {anyPossible ? (
-        <div className="w-full max-w-2xl flex items-start justify-center gap-6">
+        <div className="w-full max-w-2xl flex items-center justify-center gap-6">
           <div className="flex-1 flex justify-center">{turnSection}</div>
           <div className="w-px self-stretch bg-[#333]" />
           <div className="flex-1 flex justify-center">{castlingSection}</div>
@@ -327,7 +354,7 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                       onClick={() => setEpSquare(isSelected ? null : square)}
                       className="relative flex items-center justify-center text-base leading-none"
                       style={{
-                        backgroundColor: isSelected ? '#6B9E6B' : isLight ? '#a58e69' : '#7e6351',
+                        backgroundColor: isSelected ? '#2F80ED' : isLight ? '#a58e69' : '#7e6351',
                         cursor: isCandidate ? 'pointer' : 'default',
                       }}
                     >
@@ -340,8 +367,13 @@ export default function TurnSelectStep({ fen, onConfirm, onBack }) {
                       )}
                       {isCandidate && !isSelected && (
                         <span
-                          className="absolute inset-1 rounded-full pointer-events-none"
-                          style={{ border: '2px solid #6B9E6B' }}
+                          className="absolute inset-[6px] rounded-full pointer-events-none"
+                          style={{
+                            background: isLight
+                              ? 'rgba(47,128,237,0.7)'
+                              : 'linear-gradient(rgba(47,128,237,0.7), rgba(47,128,237,0.7)), #a58e69',
+                            boxShadow: '0 0 0 1px rgba(255,255,255,0.85), 0 0 0 2.5px #2F80ED',
+                          }}
                         />
                       )}
                     </button>
