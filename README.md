@@ -9,6 +9,11 @@ Let It Chessify is a fully offline chess board recognition and analysis tool. Po
 > packages this project into a standalone offline `.exe`, no Python/Node
 > setup required.
 
+> 📱 **Want an Android app instead of running this from source?**
+> See [**Let-It-Chessify-apk**](https://github.com/shivanshbtr/Let-It-Chessify-apk) —
+> a native offline Android port with the entire backend reimplemented in
+> Kotlin (no server, no Python), analyze positions straight from your phone's camera.
+
 ---
 
 ## Features
@@ -161,7 +166,8 @@ Let-It-Chessify/
 ## Getting started
 
 *Just want to run the app? Skip this section — download the ready-to-run
-Windows build from [Let-It-Chessify-exe](https://github.com/shivanshbtr/Let-It-Chessify-exe)
+Windows build from [Let-It-Chessify-exe](https://github.com/shivanshbtr/Let-It-Chessify-exe),
+or the Android build from [Let-It-Chessify-apk](https://github.com/shivanshbtr/Let-It-Chessify-apk),
 instead.*
 
 ### Prerequisites
