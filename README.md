@@ -168,7 +168,7 @@ instead.*
 
 - Python 3.10+
 - Node.js 18+
-- [Stockfish](https://stockfishchess.org/download/) — place `stockfish.exe` (Windows) or `stockfish` (Linux/Mac) in `backend/models/` or anywhere on your `PATH`. Direct download link also in `backend/models/README.md`.
+- [Stockfish](https://stockfishchess.org/download/) — place `stockfish.exe` (Windows) or `stockfish` (Linux/Mac) in `backend/models/`. Direct download link also in `backend/models/README.md`.
 
 ### 1. Clone
 
